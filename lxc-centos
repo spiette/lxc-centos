@@ -1,9 +1,29 @@
-#!/bin/sh
+#!/bin/bash
 
 set -x 
 set -e
 
-root=/home/simonp/misc/lxc/centos6
+REL_ARCH=x86_64
+REL_VERSION_MAJ=6
+REL_VERSION_MIN=4
+REL_RELEASE=10
+REL_PACKAGE="centos-release-${REL_VERSION_MAJ}-${REL_VERSION_MIN}.el${REL_VERSION_MAJ}.centos.${REL_RELEASE}.${ARCH}.rpm"
+MIRROR_URL="http://centos.mirror.iweb.ca/${REL_VERSION_MAJ}.${REL_VERSION_MIN}/os/${ARCH}"
+
+usage() {
+    echo "Usage: $(basename $0) rootdir" >&2
+    exit 1
+}
+
+if [ $# -ne 1 ]; then
+    usage
+fi
+root="$1"
+if [ ! -d $root ]; then
+    echo "Create the rootdir \"$rootdir\" first." >&2
+    exit 1
+fi
+
 for d in  /dev /dev/pts /dev/shm /proc /sys 
 do
     if ! mountpoint -q $root$d
@@ -20,7 +40,7 @@ then
 fi
 if ! rpm --root $root -q centos-release
 then
-    rpm --root $root -ihv http://less.cogeco.net/CentOS/6.3/os/x86_64/Packages/centos-release-6-3.el6.centos.9.x86_64.rpm
+    rpm --root $root -ihv ${MIRROR_URL}/Packages/centos-release-6-3.el6.centos.9.x86_64.rpm
 fi
 yum --installroot=$root -y install rpm yum @core --nogpgcheck
 chroot $root rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-6
