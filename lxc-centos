@@ -1,0 +1,48 @@
+#!/bin/sh
+
+set -x 
+set -e
+
+root=/home/simonp/misc/lxc/centos6
+for d in  /dev /dev/pts /dev/shm /proc /sys 
+do
+    if ! mountpoint -q $root$d
+    then
+        mkdir -p $root$d
+        mount --bind $d $root$d
+    fi
+done
+mkdir -p $root/var/lib/rpm $root/var/cache/yum
+
+if [ ! -f $root/var/lib/rpm/Basenames ]
+then
+    rpm --root $root --initdb
+fi
+if ! rpm --root $root -q centos-release
+then
+    rpm --root $root -ihv http://less.cogeco.net/CentOS/6.3/os/x86_64/Packages/centos-release-6-3.el6.centos.9.x86_64.rpm
+fi
+yum --installroot=$root -y install rpm yum @core --nogpgcheck
+chroot $root rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-6
+[ -f /etc/localtime ] && cp -fp /etc/localtime $root/etc/localtime
+
+umount $root/dev/pts $root/dev/shm $root/dev
+chroot $root /sbin/MAKEDEV null zero full tty ptmx console random urandom stdin stdout stderr
+OFF_SERVICES="acpid rpcidmapd rpcgssd nfslock netfs portmap avahi-daemon avahi-dnsconfd pcscd bluetooth auditd autofs mcstrans messagebus restorecond haldaemon gpm lm_sensors iptables ip6tables postfix restorecond udev-post"
+chroot $root chkconfig --level 1 udev-post off
+
+for S in $OFF_SERVICES; do
+    [ -f $root/etc/init.d/$S ] && chroot $root /sbin/chkconfig $S off
+done
+chroot $root /usr/sbin/pwconv
+sed -i -e '/getty/d' $root/etc/inittab
+echo "none  /dev/pts    devpts  rw  0 0" >> $root/etc/fstab
+[ -f $root/etc/yum.conf ] && echo multilib_policy=best >> $root/etc/yum.conf
+# Link /etc/mtab to /proc/mounts
+rm -f $root/etc/mtab
+ln -s /proc/mounts $root/etc/mtab
+
+sed -i 's!^/sbin/start_udev!#&!' $root/etc/rc.d/rc.sysinit
+sed -i 's!^ACTIVE_CONSOLES!#&!' $root/etc/sysconfig/init
+mv $root/etc/init/tty.conf $root/etc/init/tty.conf.disabled
+mv $root/etc/init/start-ttys.conf $root/etc/init/start-ttys.conf.disabled
